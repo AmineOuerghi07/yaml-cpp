@@ -14,12 +14,15 @@ jobs:
       strategy:
         fail-fast: false
         matrix:
-          os: [ubuntu-latest, windows-latest, macos-latest]
-          cxx_standard: [11, 17, 20]
+          os: [ubuntu-latest, windows-latest, macos-latest, windows-11-arm]
+          cxx_standard: [11, 20, 23]
           build: [static, shared]
           googletest: [build, system]
           generator: ["Default Generator", "MinGW Makefiles"]
           exclude:
+          - os: ubuntu-latest
+            cxx_standard: 11
+            googletest: system
           - os: macos-latest
             build: shared
           - os: macos-latest
@@ -30,6 +33,8 @@ jobs:
             googletest: system
           - os: windows-latest
             googletest: system
+          - os: windows-11-arm
+            googletest: system
       env:
         YAML_BUILD_SHARED_LIBS: ${{ matrix.build == 'shared' && 'ON' || 'OFF' }}
         YAML_USE_SYSTEM_GTEST: ${{ matrix.googletest == 'system' && 'ON' || 'OFF' }}
@@ -37,7 +42,7 @@ jobs:
           ${{format(matrix.generator != 'Default Generator' && '-G "{0}"' || '', matrix.generator)}}
         CMAKE_INSTALL_PREFIX: "${{ github.workspace }}/install-prefix"
         CMAKE_BUILD_TYPE: Debug
-        CMAKE_CXX_FLAGS_DEBUG: ${{ matrix.googletest == 'build' && '-g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC' || '-g' }} 
+        CMAKE_CXX_FLAGS_DEBUG: ${{ matrix.googletest == 'build' && '-g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC' || '-g' }}
       runs-on: ${{ matrix.os }}
       steps:
 
@@ -47,7 +52,7 @@ jobs:
             packages: googletest libgmock-dev libgtest-dev
             version: 1.0
 
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v7
 
         - name: Configure
           run: |
@@ -74,6 +79,9 @@ jobs:
         - name: Run Tests
           shell: bash
           run: |
+            if [[ "${{ matrix.os }}" == "windows-latest" && "${{ matrix.generator }}" == "MinGW Makefiles" ]]; then
+              export PATH="/c/mingw64/bin:$PATH"
+            fi
             ctest \
               --test-dir build \
               --build-config ${{ env.CMAKE_BUILD_TYPE }} \
@@ -99,13 +107,31 @@ jobs:
               --config ${{ env.CMAKE_BUILD_TYPE }} \
               --verbose
 
+  cmake-config-oldest-cmake:
+    name: CMake version range config check (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check CMake 3.15
+        uses: ./.github/actions/quick_cmake
+        with:
+          cmake-version: "3.15"
+        if: success() || failure()
+
+      - name: Check CMake 4.3
+        uses: ./.github/actions/quick_cmake
+        with:
+          cmake-version: "4.3"
+        if: success() || failure()
+
   bazel-build:
       strategy:
         matrix:
-          os: [ubuntu-latest, windows-latest, macos-latest]
+          os: [ubuntu-latest, windows-latest, macos-latest, windows-11-arm]
       runs-on: ${{ matrix.os }}
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v7
 
         - name: Build
           run: |
@@ -120,10 +146,10 @@ jobs:
   bzlmod-build:
       strategy:
         matrix:
-          os: [ubuntu-latest, windows-latest, macos-latest]
+          os: [ubuntu-latest, windows-latest, macos-latest, windows-11-arm]
       runs-on: ${{ matrix.os }}
       steps:
-        - uses: actions/checkout@v4
+        - uses: actions/checkout@v7
 
         - name: Build
           shell: bash
